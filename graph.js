@@ -4,13 +4,8 @@ var k = ggbApplet.getValue("k"); // 空気抵抗
 var g = ggbApplet.getValue("g"); // 重力
 var e = ggbApplet.getValue("e"); // 反発係数
 
-var curveList = ["b", "c", "d", "f", "i", "j", "l", "m", "n", "o", "p"];
 
-for (var i = 0; i < curveList.length; i++) {
-    ggbApplet.deleteObject(curveList[i]);
-}
-
-function drawCurve(px, py, VelocityXY = null) {
+function drawCurve(px, py, VelocityXY = null, label) {
 
     // 速度の計算
     var vx, vy;
@@ -29,23 +24,35 @@ function drawCurve(px, py, VelocityXY = null) {
     px = Math.round(px * 1000) / 1000
     py = Math.round(py * 1000) / 1000
 
+    var [intersectionData, xList] = calculateIntersectionData(px, py, VelocityXY);
+
+    // commandArgs = stringAdder(xList[0],xList[1],xList);
+    // 描画命令を GeoGebra に送信
+    // ggbApplet.evalCommand(label + "= Function(" + commandArgs + ")");
 
     // 放物線運動の式のテキスト形式
     var xExpression = "(" + px + " + " + vx + " * (1 - exp(-" + k + " * t)) / " + k + ")";
     var yExpression = "(" + py + " + (" + vy + " + (g / " + k + ")) / " + k + " * (1 - exp(-" + k + " * t)) - (g * t) / " + k + ")";
 
-    // 描画命令を GeoGebra に送信
-    ggbApplet.evalCommand("Curve[" + xExpression + ", " + yExpression + ", t, 0, 100]");
-
-
+    var command = stringAdder(xExpression, yExpression, t, 0, 100);
     // 描画命令をGeoGebraに送信
-    ggbApplet.evalCommand("Curve[" + curveEquation + ", t, 0, 100]");
-
-    // 地面との交点の計算
-    var intersectionData = calculateIntersectionData(px, py, VelocityXY);
+    ggbApplet.evalCommand("Curve[" + command + "]");
     return intersectionData;
 }
 
+function stringAdder(args) {
+    var string = "";
+    for (var i = 0; i < args.length; i++) {
+        if (Array.isArray(args[i])) {
+            // 引数がリストの場合、再帰的に処理して文字列に追加
+            string += stringAdder(args[i]);
+        } else {
+            string += args[i];
+        }
+        string += ",";
+    }
+    return string;
+}
 
 function calculateIntersectionData(px, py, VelocityXY) {
     // 放物線の軌道を計算
@@ -63,7 +70,9 @@ function calculateIntersectionData(px, py, VelocityXY) {
                 // 交点での速度を取得
                 var vxIntersect = points[i].vx;
                 var vyIntersect = points[i].vy;
-                return { x: xIntersect, vx: vxIntersect, vy: vyIntersect };
+
+                var xList = points.map(point => point.x);
+                return [{ x: xIntersect, vx: vxIntersect, vy: vyIntersect }, xList];
             }
         }
     }
@@ -113,12 +122,13 @@ function newVelocity(currentVelocity) {
 }
 function main() {
     var h = ggbApplet.getValue("h"); // 発射位置
-    var intersectionData = drawCurve(0, h);
+    var intersectionData = drawCurve(0, h, null, "Curve1");
 
-    for (var i = 0; i < 10; i++) {
+    // curveList is list of label for Curves
+    for (var i = 1; i < 10; i++) {
         var newVelocityXY = [intersectionData.vx, intersectionData.vy];
         newVelocityXY = newVelocity(newVelocityXY);
-        intersectionData = drawCurve(intersectionData.x, 0, newVelocityXY);
+        intersectionData = drawCurve(intersectionData.x, 0, newVelocityXY, "curve" + i);
     }
 }
 
