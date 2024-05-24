@@ -1,34 +1,33 @@
+// https://github.com/ren255/GeoGebra_Parabola
+
 function nolorizer(arg) {
     if (arg < 0) {
-        return 0
+        return 0;
     }
-    return arg
+    return arg;
 }
+
+function roundToThree(num) {
+    return +(Math.round(num * 1000) / 1000).toFixed(3);
+}
+
 function resetPoint(label, x, y = 0) {
     var command = label + "= Point({" + x + "," + y + "})";
     ggbApplet.evalCommand(command);
 }
-var v = ggbApplet.getValue("v"); // 初速度
-v = nolorizer(v);
-var a = ggbApplet.getValue("a"); // 角度
-a = nolorizer(a);
-var k = ggbApplet.getValue("k"); // 空気抵抗
-k = nolorizer(k);
-var g = ggbApplet.getValue("g"); // 重力
-g = nolorizer(g);
-var e = ggbApplet.getValue("e"); // 反発係数
-e = nolorizer(e);
-var h = ggbApplet.getValue("h"); // 発射位置
-h = nolorizer(h);
 
-function nolorizer(arg) {
-    if (arg < 0) {
-        return 0
-    }
-    return arg
+function getdata(label) {
+    var value = ggbApplet.getValue(label); // 初速度
+    value = nolorizer(value);
+    return value;
 }
 
+// draw function's
 function drawCurve(px, py, VelocityXY = null, label) {
+    var v = getdata("v");
+    var a = getdata("a");
+    // var k = getdata("k");
+    var g = 9.8;
 
     // 速度の計算
     var vx, vy;
@@ -41,20 +40,12 @@ function drawCurve(px, py, VelocityXY = null, label) {
         vx = VelocityXY[0];
         vy = VelocityXY[1];
     }
-    vx = Math.round(vx * 1000) / 1000
-    vy = Math.round(vy * 1000) / 1000
-    px = Math.round(px * 1000) / 1000
-    py = Math.round(py * 1000) / 1000
 
-    var [intersectionData, xList] = calculateIntersectionData(px, py, VelocityXY);
-
-    // commandArgs = stringAdder(xList[0],xList[1],xList);
-    // 描画命令を GeoGebra に送信
-    // ggbApplet.evalCommand(label + "= Function(" + commandArgs + ")");
+    var [intersectionData, xList] = calculateIntersectionData(px, py, [vx, vy]);
 
     // 放物線運動の式のテキスト形式
-    var xExpression = "(" + px + " + " + vx + " * (1 - exp(-" + k + " * t)) / " + k + ")";
-    var yExpression = "(" + py + " + (" + vy + " + (g / " + k + ")) / " + k + " * (1 - exp(-" + k + " * t)) - (g * t) / " + k + ")";
+    var xExpression = "(" + px + " + " + vx + " * (1 - exp(-k * t)) / k)";
+    var yExpression = "(" + py + " + (" + vy + " + (" + g + " / k)) / k * (1 - exp(-k * t)) - (" + g + " * t) / k)";
 
     var command = label + " = Curve[" + xExpression + ", " + yExpression + ", t, 0, 100]";
     ggbApplet.evalCommand(command);
@@ -102,12 +93,20 @@ function calculateIntersectionData(px, py, VelocityXY) {
 }
 
 function calculateParabolicMotionPoints(px, py, VelocityXY = null) {
+    // グローバル変数の取得
+    var v = getdata("v");
+    var a = getdata("a");
+    var k = getdata("k");
+    var g = getdata("g");
+
     // 初期速度の計算
     var vx, vy;
     if (VelocityXY == null) {
         // 速度を角度から計算
         vx = v * Math.cos(a * Math.PI / 180);
+        vx = roundToThree(vx);
         vy = v * Math.sin(a * Math.PI / 180);
+        vy = roundToThree(vy);
     } else {
         // 与えられた速度を使用
         vx = VelocityXY[0];
@@ -120,11 +119,21 @@ function calculateParabolicMotionPoints(px, py, VelocityXY = null) {
     var dt = 0.1;
     while (t <= 200) {
         var exp_kt = Math.exp(-k * t);
-        var x = px + (vx / k) * (1 - exp_kt);
-        var y = py + ((vy + g / k) / k) * (1 - exp_kt) - (g * t / k);
+        var oneMinusExpKt = roundToThree(1 - exp_kt);
+        var roundedVXOverK = roundToThree(vx / k);
+        var roundedVyPlusGOverKOverK = roundToThree(roundToThree(vy + g / k) / k);
+        var roundedGOverK = roundToThree(g / k);
+        var roundedGTOverK = roundToThree(g * t / k);
+
+        var x = px + roundedVXOverK * oneMinusExpKt;
+        x = roundToThree(x);
+        var y = py + roundedVyPlusGOverKOverK * oneMinusExpKt - roundedGTOverK;
+        y = roundToThree(y);
 
         var correntVX = vx * exp_kt;
-        var correntVY = vy * exp_kt - (g / k) * (1 - exp_kt);
+        correntVX = roundToThree(correntVX);
+        var correntVY = vy * exp_kt - roundedGOverK * oneMinusExpKt;
+        correntVY = roundToThree(correntVY);
 
         points.push({ x: x, y: y, vx: correntVX, vy: correntVY });
         t += dt;
@@ -132,26 +141,34 @@ function calculateParabolicMotionPoints(px, py, VelocityXY = null) {
     return points;
 }
 
-
 function newVelocity(currentVelocity) {
+    var e = getdata("e");
     var vx = currentVelocity[0];
     var vy = currentVelocity[1];
 
-    // 新しい速度の計算（反発係数を考
+    // 新しい速度の計算（反発係数を考慮）
     var newVy = -vy * e;
 
     return [vx, newVy];
 }
-// grobal --------------------------------------------------------------------
-function draw() {
-    var intersectionData = drawCurve(0, h, null, "Curve");
 
-    // curveList is list of label for Curves
-    for (var i = 1; i < 10; i++) {
-        var newVelocityXY = [intersectionData.vx, intersectionData.vy];
-        newVelocityXY = newVelocity(newVelocityXY);
-        var label = "curve" + i;
-        intersectionData = drawCurve(intersectionData.x, 0, newVelocityXY, label);
+// グローバル関数
+function draw(allways = 0) {
+    allwayButton = getdata("常時描画");
+    if (allways == 1 | allwayButton == 1) {
+        allways = 1;
+    }
+    if (allways == 1) {
+        var h = getdata("h");
+        var intersectionData = drawCurve(0, h, null, "Curve");
+
+        // curveList is list of label for Curves
+        for (var i = 1; i < 10; i++) {
+            var newVelocityXY = [intersectionData.vx, intersectionData.vy];
+            newVelocityXY = newVelocity(newVelocityXY);
+            var label = "curve" + i;
+            intersectionData = drawCurve(intersectionData.x, 0, newVelocityXY, label);
+        }
     }
 }
 
@@ -163,8 +180,9 @@ function resetField() {
 
     fieldAl = 3;
     fieldBl = 2.4;
-    fieldCl = 6.8;
-    tarDis = 5.25
+    fieldCl = 6;
+    // B to target 
+    tarDis = 2.6;
 
 
     if (fieldReset == ballC) {
@@ -172,15 +190,16 @@ function resetField() {
         resetPoint("A", Sdis + fieldBl);
         resetPoint("target", Sdis - tarDis);
 
-        resetPoint("fieldE", Sdis - fieldCl, -1);
         resetPoint("fieldS", Sdis + fieldAl + fieldBl, -1);
+        resetPoint("fieldE", Sdis - fieldCl, -1);
     }
     if (fieldReset == robot2C) {
         resetPoint("A", Sdis);
         resetPoint("B", Sdis + fieldBl);
-        resetPoint("target", Sdis + tarDis);
+        resetPoint("target", Sdis + (fieldBl + tarDis));
 
         resetPoint("fieldS", Sdis - fieldAl, -1);
-        resetPoint("fieldE", Sdis + fieldCl, -1);
+        resetPoint("fieldE", Sdis + (fieldBl + fieldCl), -1);
     }
 }
+
